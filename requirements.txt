@@ -1,0 +1,13 @@
+# Core scientific stack
+numpy>=1.24
+matplotlib>=3.6
+
+# Gaussian Boson Sampling / photonics
+thewalrus>=0.20
+strawberryfields>=0.23
+
+# Notes:
+#   * gbs_core.py includes a NumPy 2.0 shim (np.find_common_type) so recent
+#     NumPy works with thewalrus' Fock-space routines.
+#   * Tested with the conda env used for the notebooks
+#     (python 3.9, thewalrus + strawberryfields).
