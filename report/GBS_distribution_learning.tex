@@ -3,6 +3,7 @@
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{subcaption}
 \usepackage{hyperref}
 \usepackage{geometry}
 \geometry{margin=2.4cm}
@@ -10,7 +11,7 @@
 
 \title{Improving GBS-Based Sampling of Classical Distributions:\\
 Matrix Construction, Encoding, Optimisation and Readout}
-\author{}
+\author{I.B., L.E.C.E., V.V.P.}
 \date{}
 
 \begin{document}
@@ -28,10 +29,14 @@ measured effect on the Kullback--Leibler (KL) divergence between the learned and
 target distributions. The combination of a per-pair/parity construction, a
 Gray-code encoding, an analytic keep-best optimiser, and photon-number matching
 reduces the KL by roughly a factor of three relative to the baseline on smooth
-targets. We further show that the residual error on multimodal targets is an
-expressivity floor of a single Gaussian state, and that the detector choice
-should be matched to the target's concentration.
+targets, and by about $2.5\times$ on a multimodal target. We further show that
+the residual error on multimodal targets is an expressivity floor of a single
+Gaussian state, that the detector choice should be matched to the target's
+concentration, and that a persistent central spike is controlled by the mean
+photon number rather than by any objective reweighting.
 \end{abstract}
+
+\tableofcontents
 
 \section{Problem statement}
 
@@ -44,12 +49,12 @@ KL divergence to a target distribution. We take as target a smooth
 one-dimensional density $p(x)$ discretised into $K=2^{m}-2$ bins (dropping the
 all-zero and all-one patterns), and encode each bin as a click pattern.
 
-This report documents a sequence of improvements to that pipeline. Throughout,
-quality is measured by the KL divergence $D_{\mathrm{KL}}(p_{\mathrm{target}}\|
-p_{\mathrm{model}})$, evaluated either from Monte-Carlo samples or, where noted,
-exactly from the analytic click distribution. Three smooth targets are used
-(normal, log-normal) together with a bimodal target and, later, sharp
-(Cauchy) and asymmetric-bimodal targets.
+This report documents a sequence of improvements to that pipeline. Quality is
+measured by $D_{\mathrm{KL}}(p_{\mathrm{target}}\|p_{\mathrm{model}})$, evaluated
+either from Monte-Carlo samples (early figures) or, where noted, exactly from
+the analytic click distribution (tables). We use three smooth targets (normal,
+log-normal) and a multimodal target, and later add sharp (Cauchy) and
+asymmetric-bimodal targets.
 
 \section{Background: the factorial/parity bias}
 
@@ -61,213 +66,335 @@ P(\mathbf{n})=\frac{1}{\sqrt{\det Q}}\,\frac{|\mathrm{Haf}(A[\mathbf{n}])|^{2}}
 where $A[\mathbf{n}]$ repeats row/column $i$ exactly $n_i$ times. The hafnian of
 an odd-dimensional matrix vanishes, so any contributing configuration has an
 even total photon number. A threshold detector reports only the support
-$s_i=\mathbb{1}[n_i\ge 1]$, so the click probability sums $P(\mathbf{n})$ over
-all configurations with a given support. Two consequences drive the entire
-report: (i) every \emph{odd}-click pattern must double one mode to reach an even
-photon count, incurring a $1/2!$ suppression absent for even-click patterns;
-(ii) the collision configurations ($n_i\ge 2$) that threshold detection folds
-into a click are exactly the information a photon-counting detector would
-resolve.
+$s_i=\mathbb{1}[n_i\ge 1]$, summing $P(\mathbf{n})$ over all configurations with
+a given support. Two consequences drive the report: (i) every \emph{odd}-click
+pattern must double one mode to reach an even photon count, incurring a $1/2!$
+suppression absent for even-click patterns; (ii) the collision configurations
+($n_i\ge 2$) that threshold detection folds into a click are exactly the
+information a photon-counting detector would resolve.
 
-\section{Improving the initial construction}
+\section{Methods}
 
-\subsection{Corrected construction}
+\subsection{Initial construction}
+
+\paragraph{Corrected construction.}
 The original \texttt{A\_from\_samples} adds diagonal self-loops only for
-single-click samples. The first correction (\texttt{A\_from\_samples\_corrected})
-counts a self-loop for every clicking mode and boosts the diagonal by
-$\sqrt{2}$ to compensate the two-photon bunching term
-$P(n_i{=}2)\propto |A_{ii}|^2/2!$. This is motivated only by the $k=1$ case.
+single-click samples. \texttt{A\_from\_samples\_corrected} counts a self-loop
+for every clicking mode and boosts the diagonal by $\sqrt{2}$ to compensate the
+two-photon bunching term $P(n_i{=}2)\propto |A_{ii}|^2/2!$. This is motivated
+only by the $k=1$ case.
 
-\subsection{Parity rule}
-The same $1/2!$ factor appears for \emph{every} odd-click pattern, not only
-$k=1$. The parity rule (\texttt{A\_from\_samples\_parity}) therefore weights
-each sample by $w_s=\sqrt{2}$ if $k=|s|$ is odd and $1$ if even, applied to all
-self-loops and edges it touches. It reduces to the $\sqrt{2}$ diagonal boost for
-$k=1$ and corrects edge counts from odd-click samples that the diagonal-only fix
-leaves biased.
+\paragraph{Parity rule.}
+The same $1/2!$ factor appears for \emph{every} odd-click pattern.
+\texttt{A\_from\_samples\_parity} weights each sample by $w_s=\sqrt{2}$ if
+$k=|s|$ is odd and $1$ if even, applied to all self-loops and edges it touches.
+It reduces to the $\sqrt{2}$ boost for $k=1$ and additionally corrects edge
+counts from odd-click samples.
 
-\subsection{Per-pattern weights}
-Summing over all photon configurations under a uniform reference
-$A_0=\alpha J$ gives closed-form per-$k$ weights
-$w_k=R(2)/R(k)$ with
-$R(k)=\alpha^{-k_{\min}}\sum_{N}[(N-1)!!]^2\alpha^N f_k(N)$ and
+\paragraph{Per-pattern weights.}
+Summing over all photon configurations under a uniform reference $A_0=\alpha J$
+gives closed-form per-$k$ weights $w_k=R(2)/R(k)$ with
 $f_k(N)=[x^N](e^x-1)^k$ (\texttt{A\_from\_samples\_perpattern}). Empirically
-this over-suppresses high-$k$ samples (e.g.\ $w_3\approx0.07$), discarding real
+this over-suppresses high-$k$ samples ($w_3\approx0.07$), discarding real
 pair-correlation information, and was abandoned.
 
-\subsection{Per-pair normalisation}
-The failure above is a counting artefact: a $k$-click sample deposits into
-$\binom{k}{2}$ edges and $k$ loops, so high-$k$ samples flood the matrix. The
-per-pair construction (\texttt{A\_from\_samples\_perpair}) divides each sample's
-contribution by the number of entries it touches,
-$A_{ii}\mathrel{+}=w_s/k$ and $A_{ij}\mathrel{+}=w_s/\binom{k}{2}$, keeping the
-parity weight on top. It eliminates the spurious high-click peak and was the
-best initial construction across targets and mode counts
-(Fig.~\ref{fig:perpair}).
+\paragraph{Per-pair normalisation.}
+A $k$-click sample deposits into $\binom{k}{2}$ edges and $k$ loops, so high-$k$
+samples flood the matrix. \texttt{A\_from\_samples\_perpair} divides each
+sample's contribution by the number of entries it touches,
+$A_{ii}\mathrel{+}=w_s/k$, $A_{ij}\mathrel{+}=w_s/\binom{k}{2}$, keeping the
+parity weight. It is the most robust construction.
 
-\begin{figure}[t]
+\paragraph{Photon-number (variance) matching.}
+Rescaling fixes only the mean photon number; the variance of the click count
+$k$ is uncontrolled. \texttt{A\_from\_samples\_variance} matches the full
+click-count histogram $h(k)$ by iterative proportional fitting,
+$\rho_k \leftarrow \rho_k\,[\,h_{\mathrm{data}}(k)/h_{\mathrm{model}}(k)\,]^{\alpha}$
+(clipped), with a tunable prefactor $\alpha$.
+
+\subsection{Encoding}
+The default encoding uses the \emph{standard binary} representation of the bin
+index, which is not Hamming-smooth: adjacent bins can differ in all $m$ bits.
+A reflected Gray code $g(n)=n\oplus(n\gg1)$ (\texttt{gray\_encoding}) makes
+consecutive bins differ in one bit, keeping a smooth target piecewise-smooth in
+pattern space. \texttt{rank\_assign} additionally chooses a probability-matched
+encoding (largest target mass on the most-probable outcome), and
+\texttt{empirical\_target\_from\_data} estimates the target shape from samples
+alone so the encoding is realizable without knowing the target.
+
+\subsection{Optimisation}
+The baseline WAW uses random initialisation and returns the last iterate; on
+Gray-encoded data it collapsed onto one mode. \texttt{train\_WAW\_bestkl} uses
+zero initialisation and keep-best return. Crucially,
+\texttt{torontonian\_sample\_graph} silently rescales $A$ at sampling time, so
+the optimised and evaluated distributions differed and the reported KL could
+\emph{increase} after training; \texttt{train\_WAW\_analytic} removes this by
+minimising the exact analytic KL (loop torontonian over all $2^m$ patterns) with
+keep-best return, so KL never increases.
+
+\subsection{Displacement}
+Squeezed vacuum contains only even photon numbers, biasing click parity.
+\texttt{train\_displaced\_gbs} trains the full displacement
+$\boldsymbol\mu\in\mathbb{R}^{2m}$ (small $m$ only);
+\texttt{train\_waw\_then\_displace} is a scalable surrogate (WAW then a single
+scalar displacement tuned by binary search to match the odd-parity fraction);
+\texttt{train\_parity\_mixing} is a classical two-circuit workaround.
+
+\subsection{Readout}
+A counting detector reads $\mathbf{n}$ directly; for a collision-free pattern
+$P(\mathbf{n})\propto|\mathrm{Haf}(A_S)|^2$ over the support submatrix
+(\texttt{pnr\_readout}). \texttt{train\_threshold\_nmean} exposes the mean photon
+number $n_{\mathrm{mean}}$ as a tunable, used below to control concentration.
+
+\section{Results}
+
+\subsection{Initial construction and encoding}
+Table~\ref{tab:constr} reports the analytic KL after WAW for every construction,
+target and encoding at $m=5$ (2000 samples). Three conclusions stand out. The
+construction refinements dominate for the smooth targets (normal, log-normal),
+cutting the baseline KL by roughly $2$--$3\times$. The Gray encoding is decisive
+for the multimodal target, more than halving its KL
+($0.59\to0.24$). The variance construction is best or tied-best on the smooth
+and multimodal targets, and per-pair on the log-normal.
+
+\begin{table}[h]
 \centering
-\includegraphics[width=0.78\textwidth]{normal_fix.png}
-\caption{Per-pair construction versus baseline and per-pattern on the normal
-target ($m=5$), before and after WAW. The per-pair construction removes the
-high-click overshoot of the baseline and the low-click overshoot of the
-per-pattern weights.}
-\label{fig:perpair}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{2}{c}{Normal} & \multicolumn{2}{c}{Multimodal} & \multicolumn{2}{c}{Log-normal}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+Construction & binary & Gray & binary & Gray & binary & Gray\\
+\midrule
+Baseline              & 0.56 & 0.57 & 0.61 & 0.38 & 0.61 & 0.63\\
+Parity                & 0.21 & 0.13 & 0.59 & 0.24 & 0.34 & \textbf{0.24}\\
+Per-pair              & 0.20 & 0.14 & 0.59 & 0.28 & 0.30 & 0.25\\
+Variance ($\alpha{=}0.5$) & 0.19 & \textbf{0.13} & 0.58 & \textbf{0.27} & 0.33 & 0.25\\
+\bottomrule
+\end{tabular}
+\caption{Analytic KL after WAW ($m=5$). Best per target/encoding in bold; the
+best absolute values are $0.13$ (normal, variance+Gray), $0.24$ (multimodal,
+parity+Gray) and $0.24$ (log-normal, parity+Gray).}
+\label{tab:constr}
+\end{table}
+
+Figure~\ref{fig:fix} shows the per-pair construction against the baseline and
+per-pattern for the multimodal and log-normal targets: it removes the high-click
+overshoot of the baseline and the low-click overshoot of the per-pattern
+weights.
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{multimodal_fix.png}
+\caption{Multimodal}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{lognormal_fix.png}
+\caption{Log-normal}
+\end{subfigure}
+\caption{Per-pair construction (green) versus baseline (red) and per-pattern
+(purple), before and after WAW.}
+\label{fig:fix}
 \end{figure}
 
-\subsection{Photon-number (variance) matching}
-Rescaling fixes only the \emph{mean} photon number; the variance of the total
-photon number, and hence of the click count $k$, is uncontrolled. The
-variance-aware construction (\texttt{A\_from\_samples\_variance}) matches the
-full click-count histogram $h(k)=\Pr(|s|{=}k)$ by iterative proportional
-fitting,
-\begin{equation}
-\rho_k \leftarrow \rho_k\cdot\mathrm{clip}\!\Big(\big(h_{\mathrm{data}}(k)/
-h_{\mathrm{model}}(k)\big)^{\alpha},\,0.1,\,10\Big),
-\end{equation}
-scaling each shell's contribution by $\rho_k$. The prefactor $\alpha$ tunes the
-strength ($\alpha=0$ recovers per-pair, $\alpha=1$ is full matching); different
-targets prefer different $\alpha$.
+Figure~\ref{fig:gray} contrasts binary and Gray encoding for the multimodal and
+log-normal targets. Under Gray coding the target becomes piecewise-smooth in
+pattern order and the two modes of the multimodal target are recovered.
 
-\section{Encoding: Gray code}
-The default encoding maps bin index $b$ to its \emph{standard binary}
-representation, which is not Hamming-smooth: adjacent bins can differ in all $m$
-bits (e.g.\ $01111\leftrightarrow10000$). A smooth $p(x)$ then becomes highly
-non-smooth in pattern space, which a pairwise (hafnian) model cannot represent.
-A reflected Gray code $g(n)=n\oplus(n\gg1)$ makes consecutive bins differ in one
-bit (\texttt{gray\_encoding}). This is the single most effective change: on the
-multimodal target it roughly halves the KL, and on the normal target the
-initial-construction KL drops from ${\sim}0.4$ to ${\sim}0.25$
-(Fig.~\ref{fig:gray}).
-
-\begin{figure}[t]
+\begin{figure}[h]
 \centering
-\includegraphics[width=0.48\textwidth]{normal_bin.png}\hfill
-\includegraphics[width=0.48\textwidth]{normal_gray.png}
-\caption{Standard-binary (left) versus Gray (right) encoding on the normal
-target. Under Gray coding the target is piecewise-smooth in pattern order and
-the model tracks it more faithfully.}
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{mmodal_bin.png}
+\caption{Multimodal, binary}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{mmodal_gray.png}
+\caption{Multimodal, Gray}
+\end{subfigure}
+
+\vspace{4pt}
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{lognormal_bin.png}
+\caption{Log-normal, binary}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{lognormal_gray.png}
+\caption{Log-normal, Gray}
+\end{subfigure}
+\caption{Standard-binary versus Gray encoding. The effect is largest for the
+multimodal target, whose two peaks are shredded across Hamming space under
+binary coding.}
 \label{fig:gray}
 \end{figure}
 
-\section{Optimisation}
-The baseline WAW uses random initialisation, a fixed step count, and returns the
-last iterate; on Gray-encoded data this collapsed onto a single dominant mode.
-Two fixes are used. \texttt{train\_WAW\_bestkl} initialises weights at zero,
-monitors the KL each step, and returns the best iterate. More importantly,
-sampling with \texttt{torontonian\_sample\_graph} silently rescales $A$, so the
-optimised and evaluated distributions differed and the reported KL could
-\emph{increase} after training. \texttt{train\_WAW\_analytic} removes this by
-minimising exactly the analytic KL (evaluated with the loop torontonian over all
-$2^m$ patterns), with keep-best return, so the KL after training never exceeds
-the initial value. All later comparisons use this analytic evaluator.
+\subsection{Photon-number matching and reliable optimisation}
+Adding the variance construction and the analytic keep-best optimiser removes
+two failure modes visible in early runs: the collapse of Gray-encoded WAW onto a
+single mode, and the reported KL \emph{increasing} after optimisation (an
+artefact of the silent rescale at sampling time). Figure~\ref{fig:var} shows the
+combined pipeline (parity/per-pair/variance construction + Gray + keep-best WAW)
+for the normal and multimodal targets, displayed in original-bin order so the
+target shape is recognisable.
 
-\section{Displacement (parity at the state level)}
-Squeezed vacuum contains only even photon numbers, biasing threshold-click
-parity. Three ways to break this were explored (from earlier work).
-\texttt{train\_displaced\_gbs} trains the full displacement vector
-$\boldsymbol\mu\in\mathbb{R}^{2m}$ jointly with the weights, using the loop
-torontonian; it removes the parity constraint at the state level but scales only
-to small $m$. \texttt{train\_waw\_then\_displace} is a scalable surrogate: WAW
-first, then a single scalar displacement $\alpha$ applied to all position
-quadratures, tuned by binary search so the odd-parity fraction matches the data.
-\texttt{train\_parity\_mixing} is a purely classical workaround: train separate
-even- and odd-parity circuits (flipping one mode to map odd data to even) and
-mix them with the data's parity ratio.
-
-\section{Photon-number-resolving readout}
-A counting detector reads $\mathbf{n}$ directly, with
-$P(\mathbf{n})\propto|\mathrm{Haf}(A[\mathbf{n}])|^2/\prod_i n_i!$; for a
-collision-free pattern this is simply $|\mathrm{Haf}(A_S)|^2$ over the support
-submatrix --- the clean signal the construction heuristics were estimating
-(\texttt{pnr\_readout}). Marginalising the exact PNR distribution reproduces the
-threshold distribution, and quantifies the discarded mass: ${\sim}30\%$ of the
-probability sits in collision patterns at $m=4$
-(Fig.~\ref{fig:pnr}). However, at fixed modes PNR adds no matrix parameters, and
-under a probability-matched encoding it does \emph{not} generally beat threshold
-learning: its usable outcomes are dominated by a steep photon-number magnitude
-hierarchy. Its genuine value is (i) as a diagnostic, and (ii) that its model
-family is intrinsically more \emph{concentrated}, which helps on
-sharply-peaked targets (Sec.~\ref{sec:diag}).
-
-\begin{figure}[t]
+\begin{figure}[h]
 \centering
-\includegraphics[width=0.48\textwidth]{pnr_normal.png}\hfill
-\includegraphics[width=0.48\textwidth]{pnr_merged_normal.png}
-\caption{Left: threshold versus full-PNR learning at matched resolution. Right:
-each threshold click, opened into the photon configurations a counting detector
-resolves ($200,400,\dots$ merge into one click); the high-photon configurations
-are probability-starved.}
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{gray_var_normal.png}
+\caption{Normal}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{gray_var_multi_regular.png}
+\caption{Multimodal}
+\end{subfigure}
+\caption{Gray encoding + variance-aware construction + keep-best WAW. The
+multimodal panel still shows a residual central bump between the two modes ---
+an expressivity floor discussed in Sec.~\ref{sec:concentration}.}
+\label{fig:var}
+\end{figure}
+
+\subsection{Threshold versus photon-counting readout}
+\label{sec:pnr}
+Marginalising the exact PNR distribution reproduces the threshold distribution
+and quantifies the discarded mass: at $m=4$, ${\sim}20$--$30\%$ of the
+probability sits in collision patterns ($n_i\ge 2$) that threshold detection
+folds into clicks. Figure~\ref{fig:pnr} compares threshold and full-PNR learning
+and opens each threshold click into the photon configurations a counting
+detector resolves; the high-photon configurations are probability-starved.
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{pnr_mmodal.png}
+\caption{Threshold vs PNR (multimodal)}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{pnr_merged_mmodal.png}
+\caption{PNR configs merged into each click}
+\end{subfigure}
+\caption{Photon-counting readout. Right: patterns such as $200,400,\dots$ all
+read as one threshold click; the stacked mass is dominated by a few low-photon
+configurations.}
 \label{fig:pnr}
 \end{figure}
 
-\section{Honest evaluation: encoding from samples}
-The probability-matched encoding (\texttt{rank\_assign}) places the largest
-target mass on the most-probable outcome. Using the \emph{true} target to build
-it is an oracle; in practice only samples are available. The realizable version
-(\texttt{empirical\_target\_from\_data}) estimates the target shape by decoding
-samples back to bin indices and histogramming, and uses that empirical estimate
-for both the encoding and the training objective. The true target is used only
-to report a generalisation KL. Empirically the two KLs coincide (no overfitting
-of sampling noise), and the empirical encoding matches the oracle to within
-${\sim}0.01$ KL, confirming the encoding is robust.
+At fixed modes PNR adds no matrix parameters, and under a probability-matched
+encoding it does \emph{not} generally beat threshold learning: its usable
+outcomes are dominated by a steep photon-number magnitude hierarchy. The naive
+photon-ordered encoding gives a catastrophic $\mathrm{KL}\approx3.7$; a
+probability-matched encoding (\texttt{rank\_assign}) is essential.
 
-\section{Diagnostic findings}
-\label{sec:diag}
-\paragraph{A central spike and its suppression.} On smooth unimodal targets the
-learned distribution shows a spike at the peak bin, roughly twice its neighbours
-at $m=5$ and $2.8\times$ at $m=6$. It is not a histogram artefact
-($\hat p$ is smooth at the peak); it is the model's single most-probable pattern
-($q_0/q_1\approx2.3$) mapped onto the peak bin, which forward KL is content to
-overshoot. Reverse-KL regularisation does not help --- the concentration is
-structural for the low-parameter weight family. The effective control is the
-mean photon number: the default $n_{\mathrm{mean}}=m/2$ over-squeezes, and
-lowering it to ${\approx}2$ (\texttt{train\_threshold\_nmean}) flattens the head,
-removes the spike, and even lowers the KL on broad targets.
+\subsection{Detector choice matches target concentration}
+\label{sec:concentration}
+The threshold and PNR model families differ in how concentrated they are. Fitted
+at $m=6$, the threshold family is comparatively spread (entropy $3.6$, top-5
+pattern mass $0.27$) while the PNR family is concentrated (entropy $3.2$, top-5
+mass $0.43$). Matching this to the target's own concentration explains which
+detector wins (Table~\ref{tab:conc}): threshold wins on the broad normal target
+(${\sim}42/62$ effective bins occupied), PNR wins on the concentrated
+asymmetric-bimodal target (${\sim}26/62$ occupied), robustly across 5 seeds.
 
-\paragraph{Detector choice matches target concentration.} The threshold model
-family is comparatively spread (higher entropy, lower top-$k$ mass), while the
-PNR family is concentrated. Consequently threshold wins on broad targets (the
-normal, ${\sim}42/62$ effective bins occupied at $m=6$) and PNR wins on
-concentrated ones (the asymmetric bimodal, ${\sim}26/62$ occupied), robustly
-across seeds. The practical rule is to match the readout to the target's
-concentration.
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+$m=6$ & Threshold & PNR\\
+\midrule
+Fitted-model entropy        & 3.6 & 3.2\\
+Top-5 pattern mass          & 0.27 & 0.43\\
+\midrule
+KL, Normal (broad, 42/62)          & \textbf{0.05} & 0.53\\
+KL, Asym-bimodal (concentrated, 26/62) & 0.12 & \textbf{0.08}\\
+\bottomrule
+\end{tabular}
+\caption{The concentrated PNR family suits sharply-peaked targets; the spread
+threshold family suits broad ones.}
+\label{tab:conc}
+\end{table}
 
-\section{Results summary}
-Table~\ref{tab:summary} collects representative analytic KL values (normal and
-multimodal targets), illustrating the cumulative effect of the improvements.
-Numbers are seed-dependent at the $\pm0.02$ level.
+\subsection{A central spike and its suppression}
+\label{sec:spike}
+On smooth unimodal targets the learned distribution shows a spike at the peak
+bin, ${\approx}2\times$ its neighbours at $m=5$ and ${\approx}2.8\times$ at
+$m=6$ (both robust over seeds). It is not a histogram artefact (the empirical
+histogram is smooth at the peak, ${\sim}1.1\times$ its neighbours); it is the
+model's single most-probable pattern ($q_0/q_1\approx2.3$) mapped onto the peak
+bin, which forward KL is content to overshoot. Reverse-KL regularisation does
+\emph{not} help --- the concentration is structural for the low-parameter weight
+family. The effective control is the mean photon number: the default
+$n_{\mathrm{mean}}=m/2$ over-squeezes, and lowering it flattens the head, removes
+the spike, and even lowers the KL on broad targets (Table~\ref{tab:spike}). Part
+of why the spike is worse at $m=6$ is simply that the default
+$n_{\mathrm{mean}}=m/2$ is larger there.
 
 \begin{table}[h]
 \centering
 \begin{tabular}{lccc}
 \toprule
-Method (with analytic WAW) & Normal $m{=}5$ & Multimodal $m{=}5$ & Encoding\\
+$n_{\mathrm{mean}}$ (Normal, $m{=}6$) & spike/neighbour & $q_0/q_1$ & KL\\
 \midrule
-Baseline construction      & 0.44 & 0.65 & binary\\
-Parity                     & 0.12 & 0.63 & binary\\
-Per-pair                   & 0.10 & 0.60 & binary\\
-Parity + Gray              & 0.13 & 0.24 & Gray\\
-Per-pair / variance + Gray & 0.10 & 0.23 & Gray\\
+1.0            & 1.2 & 1.03 & 0.102\\
+\textbf{2.0}   & \textbf{1.5} & \textbf{1.22} & \textbf{0.042}\\
+3.0 (default $m/2$) & 2.5 & 2.25 & 0.048\\
+4.5            & 4.6 & 3.83 & 0.083\\
+9.0            & 6.4 & 5.43 & 0.167\\
 \bottomrule
 \end{tabular}
-\caption{Representative KL after optimisation. The Gray encoding is decisive for
-the multimodal target; the construction refinements dominate for the smooth
-normal target.}
-\label{tab:summary}
+\caption{Lowering the mean photon number suppresses the central spike and, near
+$n_{\mathrm{mean}}\approx2$, also minimises the KL. Larger values re-inflate it.}
+\label{tab:spike}
+\end{table}
+
+\subsection{Outlier suppression and its limits}
+Forward KL is zero-avoiding: where the target is ${\sim}0$ (a valley), it does
+not penalise stray model mass, so valley outliers (e.g.\ the \texttt{10000} bump
+in the multimodal gap) survive. A reverse-KL term (\texttt{train\_WAW\_mixed})
+penalises exactly $q>p$ overshoot, but on the multimodal target the valley mass
+falls only from $0.386$ to $0.367$ as $\beta$ grows from $0$ to $0.6$ while the
+forward KL rises. The weak response is itself informative: those outliers are
+structural (a single Gaussian state is forced to emit inter-mode mass), not an
+objective artefact. Reverse KL cleanly removes only \emph{removable} outliers.
+
+\subsection{Honest evaluation: encoding estimated from samples}
+The probability-matched encoding must not peek at the true target. Using the
+\emph{empirical} histogram $\hat p$ (from samples only) for both the encoding and
+the training objective, and the true target only to report a generalisation KL,
+gives KL$_{\mathrm{train}}\approx$ KL$_{\mathrm{gen}}$ (no overfitting of
+sampling noise). Table~\ref{tab:oracle} shows the empirical encoding matches the
+oracle and both far outperform the fixed integer encoding --- the small oracle
+advantage is not a hidden cheat but a robust property of the encoding. A
+sample-size sweep indicates ${\sim}50$--$100$ samples per bin suffice before the
+model's expressivity floor dominates.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lc}
+\toprule
+Threshold $m{=}5$, Normal & KL\\
+\midrule
+Standard-binary (integer) encoding & 0.21\\
+\texttt{rank\_assign} (oracle, true target) & 0.06\\
+\texttt{rank\_assign} (empirical $\hat p$, samples only) & 0.06\\
+\bottomrule
+\end{tabular}
+\caption{The encoding is realizable from samples alone; the oracle is not
+cheating.}
+\label{tab:oracle}
 \end{table}
 
 \section{Conclusions and outlook}
 The GBS distribution-learning pipeline has several orthogonal bottlenecks, each
 individually addressable: the initial construction (parity / per-pair /
-variance), the encoding (Gray), the optimiser (analytic keep-best), the photon
-budget (mean via $n_{\mathrm{mean}}$, variance via click-count matching), and
-the detector (threshold vs counting). Their combination reduces the KL by about
-a factor of three on smooth targets. The residual error on multimodal targets is
-an expressivity floor of a single Gaussian state --- neither objective
-reweighting nor encoding removes it. The natural next step is added expressivity:
-displacement (already prototyped) or a small mixture of GBS states, evaluated
-under the honest, sample-only protocol and the analytic KL used here.
+variance), the encoding (Gray + probability matching), the optimiser (analytic
+keep-best), the photon budget (mean via $n_{\mathrm{mean}}$, variance via
+click-count matching), and the detector (threshold vs counting). Their
+combination reduces the KL by about a factor of three on smooth targets and
+$2.5\times$ on the multimodal target. Two structural limits remain and are now
+well characterised: the multimodal valley is an expressivity floor of a single
+Gaussian state (neither objective reweighting nor encoding removes it), and the
+detector should be matched to the target's concentration. The natural next step
+is added expressivity --- displacement (already prototyped) or a small mixture
+of GBS states --- evaluated under the honest, sample-only protocol and the
+analytic KL used here.
 
 \begin{thebibliography}{9}
 \bibitem{banchi2020}
