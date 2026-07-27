@@ -144,7 +144,10 @@ scalar displacement tuned by binary search to match the odd-parity fraction);
 A counting detector reads $\mathbf{n}$ directly; for a collision-free pattern
 $P(\mathbf{n})\propto|\mathrm{Haf}(A_S)|^2$ over the support submatrix
 (\texttt{pnr\_readout}). \texttt{train\_threshold\_nmean} exposes the mean photon
-number $n_{\mathrm{mean}}$ as a tunable, used below to control concentration.
+number $n_{\mathrm{mean}}$ as a tunable, used below to control concentration;
+\texttt{select\_nmean} picks it by minimising the empirical KL, and
+\texttt{combine\_threshold\_pnr} forms the empirical-best convex mixture of the
+two readouts.
 
 \section{Results}
 
@@ -344,6 +347,61 @@ $n_{\mathrm{mean}}\approx2$, also minimises the KL. Larger values re-inflate it.
 \label{tab:spike}
 \end{table}
 
+\subsection{Choosing the mean photon number}
+\label{sec:selectnmean}
+Since $n_{\mathrm{mean}}=0$ is degenerate (vacuum: no clicks) and a broad target
+starved of high-click patterns fits poorly at very small $n_{\mathrm{mean}}$,
+there is a target-dependent optimum. It is selected honestly by sweeping
+$n_{\mathrm{mean}}$ and minimising the KL to the \emph{empirical} target
+(samples only); the choice generalises to the true target (the empirical and
+true KL curves coincide). Figure~\ref{fig:nmean} shows the two competing
+effects: the fit quality (left) has a minimum whose location depends on the
+target, while the central spike (right) grows monotonically with
+$n_{\mathrm{mean}}$. The optimum tracks the target's concentration
+(Table~\ref{tab:nmean}): broad targets prefer $n_{\mathrm{mean}}\approx2$ ---
+already below the default $m/2$ --- while sharply concentrated targets prefer
+$n_{\mathrm{mean}}\approx0.5$. In every case the default $m/2$ is suboptimal, so
+$n_{\mathrm{mean}}$ should be selected, not hard-wired (\texttt{select\_nmean}).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{nmean_sweep_normal.png}
+\caption{Normal target ($m=6$): the fitted threshold distribution at
+increasing $n_{\mathrm{mean}}$. The central spike (its ratio to the neighbours
+is annotated) grows with $n_{\mathrm{mean}}$; too small a value under-fits the
+broad body. The best trade-off is around $n_{\mathrm{mean}}=2$.}
+\label{fig:nmeangrid}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.86\textwidth]{nmean_selection.png}
+\caption{Effect of $n_{\mathrm{mean}}$ across targets ($m=6$). Left: KL to the
+true target, with a target-dependent minimum. Right: the central spike grows
+monotonically with $n_{\mathrm{mean}}$. Broad targets (normal, log-normal)
+optimise near $2$; concentrated targets (Cauchy, asymmetric bimodal) near
+$0.5$.}
+\label{fig:nmean}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{llcc}
+\toprule
+Target & character & best $n_{\mathrm{mean}}$ & KL$_{\mathrm{gen}}$\\
+\midrule
+Normal        & broad         & 2.0 & 0.042\\
+Log-normal    & moderate      & 2.0 & 0.054\\
+Cauchy        & sharp peak    & 0.5 & 0.027\\
+Asym.\ bimodal & concentrated  & 0.5 & 0.047\\
+\bottomrule
+\end{tabular}
+\caption{Selected $n_{\mathrm{mean}}$ (by minimum empirical KL, $m=6$). The
+optimum decreases with the target's concentration; all are below the default
+$m/2=3$.}
+\label{tab:nmean}
+\end{table}
+
 \subsection{Outlier suppression and its limits}
 Forward KL is zero-avoiding: where the target is ${\sim}0$ (a valley), it does
 not penalise stray model mass, so valley outliers (e.g.\ the \texttt{10000} bump
@@ -381,6 +439,68 @@ cheating.}
 \label{tab:oracle}
 \end{table}
 
+\section{Combining threshold and photon-counting readouts}
+\label{sec:combine}
+Sections~\ref{sec:pnr}--\ref{sec:concentration} showed that the threshold and
+PNR readouts are complementary: threshold is a spread family (good on broad
+targets), PNR a concentrated one (good on sharp peaks). Since both fitted models
+can be mapped back to the same $x$-bins (by inverting their probability-matched
+encoding), they can be combined there. We use a convex mixture
+\begin{equation}
+q_{\mathrm{mix}}(x) = w\,q_{\mathrm{thr}}(x) + (1-w)\,q_{\mathrm{PNR}}(x),
+\end{equation}
+with the weight $w$ chosen by minimising the KL to the \emph{empirical} target
+(samples only). This is physically realizable --- run each detector with
+probability $w$ per shot --- and, being a convex combination, is never worse
+than the better single model. A product-of-experts variant
+$q\propto q_{\mathrm{thr}}^{w}q_{\mathrm{PNR}}^{1-w}$ was also tested
+(\texttt{combine\_threshold\_pnr}).
+
+Table~\ref{tab:combine} reports the outcome. On pure-broad (normal) and
+skewed (log-normal) targets the mixture correctly defaults to (almost) all
+threshold ($w^\star\!\to\!1$), matching the better model. On targets with
+\emph{mixed} structure it beats both single readouts substantially: the Cauchy
+target (a sharp peak on broad tails) drops from $0.083$/$0.615$ to $0.025$ at an
+even $w^\star=0.5$ (Fig.~\ref{fig:combine}), and the asymmetric bimodal from
+$0.114$/$0.077$ to $0.039$. The mechanism is visible in
+Fig.~\ref{fig:combine}: threshold supplies the broad tails that PNR
+underproduces, while PNR supplies the sharp peak that threshold overshoots, so
+their mixture tracks the target where neither alone can.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Target ($m{=}6$) & Threshold & PNR & Mixture & $w^\star$\\
+\midrule
+Normal        & \textbf{0.047} & 0.537 & 0.047 & 1.00\\
+Log-normal    & \textbf{0.051} & 0.280 & 0.050 & 0.86\\
+Cauchy        & 0.083 & 0.615 & \textbf{0.025} & 0.50\\
+Asym.\ bimodal & 0.114 & 0.077 & \textbf{0.039} & 0.14\\
+\bottomrule
+\end{tabular}
+\caption{KL to the true target for the single readouts and their empirical-best
+convex mixture. The mixture never loses and wins by $2$--$3\times$ on targets
+with both broad and sharp structure.}
+\label{tab:combine}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{combine_cauchy.png}
+\caption{Cauchy}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}
+\includegraphics[width=\textwidth]{combine_bimodal_asym.png}
+\caption{Asymmetric bimodal}
+\end{subfigure}
+\caption{Threshold + PNR convex mixture (purple) against the single readouts.
+Left panels: distributions; right panels: KL versus mixing weight $w$, with a
+clear interior optimum. The mixture beats both single readouts.}
+\label{fig:combine}
+\end{figure}
+
 \section{Conclusions and outlook}
 The GBS distribution-learning pipeline has several orthogonal bottlenecks, each
 individually addressable: the initial construction (parity / per-pair /
@@ -388,13 +508,23 @@ variance), the encoding (Gray + probability matching), the optimiser (analytic
 keep-best), the photon budget (mean via $n_{\mathrm{mean}}$, variance via
 click-count matching), and the detector (threshold vs counting). Their
 combination reduces the KL by about a factor of three on smooth targets and
-$2.5\times$ on the multimodal target. Two structural limits remain and are now
-well characterised: the multimodal valley is an expressivity floor of a single
-Gaussian state (neither objective reweighting nor encoding removes it), and the
-detector should be matched to the target's concentration. The natural next step
-is added expressivity --- displacement (already prototyped) or a small mixture
-of GBS states --- evaluated under the honest, sample-only protocol and the
-analytic KL used here.
+$2.5\times$ on the multimodal target.
+
+Two levers introduced here give further gains without new physics. First, the
+mean photon number should be \emph{selected} rather than fixed to $m/2$: it
+trades the central spike against high-click coverage, and its optimum tracks the
+target's concentration (Sec.~\ref{sec:selectnmean}). Second, the threshold and
+photon-counting readouts are complementary and their empirical-best convex
+mixture never loses and wins by $2$--$3\times$ on targets with both broad and
+sharp structure (Sec.~\ref{sec:combine}); the mixture is physically realizable
+as a per-shot choice of detector.
+
+Two structural limits remain and are now well characterised: the multimodal
+valley is an expressivity floor of a single Gaussian state (neither objective
+reweighting nor encoding removes it), and single detectors are concentration-
+limited. The natural next step is added expressivity --- displacement (already
+prototyped) or a small mixture of GBS states --- evaluated under the honest,
+sample-only protocol and the analytic KL used here.
 
 \begin{thebibliography}{9}
 \bibitem{banchi2020}

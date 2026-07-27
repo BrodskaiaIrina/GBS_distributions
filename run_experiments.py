@@ -115,6 +115,33 @@ def _train_pnr(A_base, p_target, pats, modes, steps=100, rate=0.05, eps=1e-3):
     return q_of(bt)
 
 
+def nmean(target="normal", modes=6, num_samples=6000):
+    """Select the mean photon number by minimising the empirical KL."""
+    from optimization.select_nmean import select_nmean
+    dist = TARGETS[target]
+    data = bin_samples_from_dist(dist, X0, X1, num_samples, modes)
+    best, _, hist = select_nmean(data, modes)
+    print(f"\n{target} m={modes} — n_mean selection (best = {best})")
+    print(f"  {'n_mean':>7} {'KL_emp':>8} {'spike':>7}")
+    for nm, kl, sp in hist:
+        print(f"  {nm:>7.1f} {kl:>8.4f} {sp:>7.2f}{'  <- best' if nm == best else ''}")
+
+
+def combine(target="cauchy", modes=6, num_samples=6000):
+    """Threshold + PNR convex mixture, weight chosen on the empirical target."""
+    from ensemble.combine_threshold_pnr import combine_threshold_pnr
+    from gbs_core import _safe_kl
+    dist = TARGETS[target]
+    xs = np.linspace(X0, X1, 2 ** modes - 2)
+    pt = dist(xs); pt = pt / pt.sum()
+    data = bin_samples_from_dist(dist, X0, X1, num_samples, modes)
+    q_mix, w, q_thr, q_pnr = combine_threshold_pnr(data, modes)
+    print(f"\n{target} m={modes} — threshold + PNR mixture (KL vs true)")
+    print(f"  threshold        : {_safe_kl(pt, q_thr):.4f}")
+    print(f"  PNR              : {_safe_kl(pt, q_pnr):.4f}")
+    print(f"  mixture (w*={w:.2f}) : {_safe_kl(pt, q_mix):.4f}")
+
+
 def spike(target="normal", modes=6, num_samples=6000):
     """Show the central spike suppressed by lowering n_mean."""
     dist = TARGETS[target]
@@ -135,7 +162,7 @@ def spike(target="normal", modes=6, num_samples=6000):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("experiment", choices=["constructions", "pnr", "spike"])
+    ap.add_argument("experiment", choices=["constructions", "pnr", "spike", "nmean", "combine"])
     ap.add_argument("--target", default="normal", choices=list(TARGETS))
     ap.add_argument("--modes", type=int, default=5)
     ap.add_argument("--encoding", default="binary", choices=["binary", "gray"])
@@ -147,3 +174,7 @@ if __name__ == "__main__":
         pnr(a.target, a.modes, a.num_samples)
     elif a.experiment == "spike":
         spike(a.target, a.modes, a.num_samples)
+    elif a.experiment == "nmean":
+        nmean(a.target, a.modes, a.num_samples)
+    elif a.experiment == "combine":
+        combine(a.target, a.modes, a.num_samples)

@@ -28,6 +28,9 @@ optimization/                       WAW training variants
   train_WAW_analytic.py               minimises the exact analytic KL
   train_WAW_mixed.py                  reverse-KL outlier suppression
   train_threshold_nmean.py            central-spike suppression via n_mean
+  select_nmean.py                     pick n_mean by minimum empirical KL
+ensemble/
+  combine_threshold_pnr.py            empirical-best mixture of the two readouts
 displacement/                       breaking photon-number parity
   train_displaced_gbs.py              full 2m displacement vector
   train_waw_then_displace.py          scalable scalar displacement
@@ -80,6 +83,12 @@ python run_experiments.py pnr --target bimodal_asym --modes 6 --num_samples 6000
 
 # central-spike suppression by lowering n_mean
 python run_experiments.py spike --target normal --modes 6
+
+# select the mean photon number by minimum empirical KL
+python run_experiments.py nmean --target cauchy --modes 6
+
+# threshold + PNR convex mixture (beats both on mixed-structure targets)
+python run_experiments.py combine --target cauchy --modes 6
 ```
 
 Targets: `normal`, `mmodal`, `lognorm`, `expo`, `cauchy`, `bimodal_asym`.
@@ -111,8 +120,10 @@ print(kl_before, "->", kl_after)
 | Reliable, monotone optimisation | `optimization/train_WAW_analytic.py` |
 | Remove valley outliers | `optimization/train_WAW_mixed.py` |
 | Remove the central peak spike | `optimization/train_threshold_nmean.py` |
+| Choose the mean photon number | `optimization/select_nmean.py` |
 | Break photon-number parity | `displacement/*.py` |
 | Photon-counting detectors | `readout/pnr_readout.py` |
+| Combine threshold + PNR | `ensemble/combine_threshold_pnr.py` |
 
 ## Summary of findings
 
@@ -125,5 +136,11 @@ print(kl_before, "->", kl_after)
   lowering it suppresses the central spike and can lower the KL.
 - **Threshold vs PNR**: match the detector to the target's concentration —
   threshold for broad targets, photon-counting for sharply-peaked ones.
+- **`n_mean` selection**: sweep and pick the minimum-empirical-KL value; the
+  optimum tracks target concentration (broad ≈ 2, sharp ≈ 0.5) and is always
+  below the default `m/2`.
+- **Threshold + PNR mixture**: the empirical-best convex mixture never loses and
+  beats both single readouts by 2–3× on targets with both broad and sharp
+  structure (e.g. Cauchy, asymmetric bimodal).
 - The residual error on multimodal targets is an expressivity floor of a single
   Gaussian state; displacement or a GBS mixture is the next step.
