@@ -145,9 +145,12 @@ A counting detector reads $\mathbf{n}$ directly; for a collision-free pattern
 $P(\mathbf{n})\propto|\mathrm{Haf}(A_S)|^2$ over the support submatrix
 (\texttt{pnr\_readout}). \texttt{train\_threshold\_nmean} exposes the mean photon
 number $n_{\mathrm{mean}}$ as a tunable, used below to control concentration;
-\texttt{select\_nmean} picks it by minimising the empirical KL, and
+\texttt{select\_nmean} picks it by minimising the empirical KL,
 \texttt{combine\_threshold\_pnr} forms the empirical-best convex mixture of the
-two readouts.
+two readouts, and \texttt{combine\_local} extends it to a location-dependent
+(per-bin) mixture. The scaling study (Sec.~\ref{sec:scaling}) additionally uses
+four harder targets: strongly skewed, very narrow, heavy-tailed, and a
+mixed sharp-plus-broad shape.
 
 \section{Results}
 
@@ -187,11 +190,13 @@ weights.
 
 \begin{figure}[h]
 \centering
-\begin{subfigure}{0.49\textwidth}
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{multimodal_fix.png}
 \caption{Multimodal}
-\end{subfigure}\hfill
-\begin{subfigure}{0.49\textwidth}
+\end{subfigure}
+
+\vspace{8pt}
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{lognormal_fix.png}
 \caption{Log-normal}
 \end{subfigure}
@@ -206,28 +211,35 @@ pattern order and the two modes of the multimodal target are recovered.
 
 \begin{figure}[h]
 \centering
-\begin{subfigure}{0.49\textwidth}
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{mmodal_bin.png}
 \caption{Multimodal, binary}
-\end{subfigure}\hfill
-\begin{subfigure}{0.49\textwidth}
+\end{subfigure}
+
+\vspace{8pt}
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{mmodal_gray.png}
 \caption{Multimodal, Gray}
 \end{subfigure}
+\caption{Standard-binary versus Gray encoding, multimodal target. Under Gray the
+two peaks are recovered; under binary they are shredded across Hamming space.}
+\label{fig:gray}
+\end{figure}
 
-\vspace{4pt}
-\begin{subfigure}{0.49\textwidth}
+\begin{figure}[h]
+\centering
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{lognormal_bin.png}
 \caption{Log-normal, binary}
-\end{subfigure}\hfill
-\begin{subfigure}{0.49\textwidth}
+\end{subfigure}
+
+\vspace{8pt}
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{lognormal_gray.png}
 \caption{Log-normal, Gray}
 \end{subfigure}
-\caption{Standard-binary versus Gray encoding. The effect is largest for the
-multimodal target, whose two peaks are shredded across Hamming space under
-binary coding.}
-\label{fig:gray}
+\caption{Standard-binary versus Gray encoding, log-normal target.}
+\label{fig:graylog}
 \end{figure}
 
 \subsection{Photon-number matching and reliable optimisation}
@@ -241,17 +253,21 @@ target shape is recognisable.
 
 \begin{figure}[h]
 \centering
-\begin{subfigure}{0.49\textwidth}
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{gray_var_normal.png}
 \caption{Normal}
-\end{subfigure}\hfill
-\begin{subfigure}{0.49\textwidth}
+\end{subfigure}
+
+\vspace{8pt}
+\begin{subfigure}{0.82\textwidth}
 \includegraphics[width=\textwidth]{gray_var_multi_regular.png}
 \caption{Multimodal}
 \end{subfigure}
 \caption{Gray encoding + variance-aware construction + keep-best WAW. The
 multimodal panel still shows a residual central bump between the two modes ---
-an expressivity floor discussed in Sec.~\ref{sec:concentration}.}
+an expressivity floor discussed in Sec.~\ref{sec:concentration}. (Here a fixed
+Gray encoding is used; the probability-matched encoding of
+Sec.~\ref{sec:pnr} reproduces the valley more cleanly.)}
 \label{fig:var}
 \end{figure}
 
@@ -266,15 +282,17 @@ detector resolves; the high-photon configurations are probability-starved.
 
 \begin{figure}[h]
 \centering
-\begin{subfigure}{0.49\textwidth}
+\begin{subfigure}{\textwidth}
 \includegraphics[width=\textwidth]{pnr_mmodal.png}
 \caption{Threshold vs PNR (multimodal)}
-\end{subfigure}\hfill
-\begin{subfigure}{0.49\textwidth}
-\includegraphics[width=\textwidth]{pnr_merged_mmodal.png}
-\caption{PNR configs merged into each click}
 \end{subfigure}
-\caption{Photon-counting readout. Right: patterns such as $200,400,\dots$ all
+
+\vspace{8pt}
+\begin{subfigure}{\textwidth}
+\includegraphics[width=\textwidth]{pnr_merged_mmodal.png}
+\caption{PNR configs merged into each threshold click}
+\end{subfigure}
+\caption{Photon-counting readout. Bottom: patterns such as $200,400,\dots$ all
 read as one threshold click; the stacked mass is dominated by a few low-photon
 configurations.}
 \label{fig:pnr}
@@ -375,7 +393,7 @@ broad body. The best trade-off is around $n_{\mathrm{mean}}=2$.}
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.86\textwidth]{nmean_selection.png}
+\includegraphics[width=\textwidth]{nmean_selection.png}
 \caption{Effect of $n_{\mathrm{mean}}$ across targets ($m=6$). Left: KL to the
 true target, with a target-dependent minimum. Right: the central spike grows
 monotonically with $n_{\mathrm{mean}}$. Broad targets (normal, log-normal)
@@ -487,21 +505,108 @@ with both broad and sharp structure.}
 
 \begin{figure}[h]
 \centering
-\begin{subfigure}{0.49\textwidth}
+\begin{subfigure}{\textwidth}
 \includegraphics[width=\textwidth]{combine_cauchy.png}
 \caption{Cauchy}
-\end{subfigure}\hfill
-\begin{subfigure}{0.49\textwidth}
+\end{subfigure}
+
+\vspace{8pt}
+\begin{subfigure}{\textwidth}
 \includegraphics[width=\textwidth]{combine_bimodal_asym.png}
 \caption{Asymmetric bimodal}
 \end{subfigure}
 \caption{Threshold + PNR convex mixture (purple) against the single readouts.
-Left panels: distributions; right panels: KL versus mixing weight $w$, with a
+Left of each row: distributions; right: KL versus mixing weight $w$, with a
 clear interior optimum. The mixture beats both single readouts.}
 \label{fig:combine}
 \end{figure}
 
+\section{Scaling study: harder targets, more modes, and worst cases}
+\label{sec:scaling}
+To test the pipeline beyond the original three targets we added four harder
+ones --- strongly right-\emph{skewed}, very \emph{narrow} (a single peak of
+effective width $\sim2$ bins), \emph{heavy-tailed} (power-law), and
+\emph{sharp\_plus\_broad} (a narrow spike together with a broad hump) --- and
+swept $m\in\{4,5,6\}$. For each target/mode we report the best achievable KL
+over the threshold (with $n_{\mathrm{mean}}$ selected from $\{0.5,2\}$), PNR,
+global-mixture and local-mixture methods (Fig.~\ref{fig:heatmap}).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.62\textwidth]{scaling_heatmap.png}
+\caption{Best-achievable KL (minimum over methods) across nine targets and
+$m\in\{4,5,6\}$. Almost every target reaches $\mathrm{KL}\le0.08$; the sole
+hard case is the very concentrated \emph{narrow} target.}
+\label{fig:heatmap}
+\end{figure}
+
+\paragraph{The pipeline is broadly robust.} Eight of the nine targets ---
+including the strongly skewed and heavy-tailed ones --- reach
+$\mathrm{KL}\lesssim0.08$ at every mode count, with the global mixture matching
+or beating the single readouts throughout. Increasing $m$ does not degrade the
+fit; the extra resolution is used, not wasted.
+
+\paragraph{Worst case: very concentrated targets.} The one clear struggle is
+the \emph{narrow} target, with best KL $0.32/0.25/0.20$ at $m=4/5/6$
+(Fig.~\ref{fig:worst}). The model locates the peak correctly but cannot
+suppress the leakage onto other patterns: a GBS click distribution has a
+\emph{concentration ceiling} --- its most-probable pattern cannot be made to
+carry the $\sim0.5$ mass a two-bin target demands. This is the mirror image of
+the multimodal-valley limit (Sec.~\ref{sec:concentration}): there the model
+cannot spread mass into a deep valley, here it cannot pile it into a narrow
+peak. Notably the narrow case \emph{improves} with $m$, because finer binning
+makes the same physical peak span more bins, lowering its relative
+concentration.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{worstcase_narrow_m4.png}
+\caption{Worst case: the \emph{narrow} target ($m=4$). The model finds the
+location but leaks $\sim0.13$ onto a distant pattern --- the concentration
+ceiling of a GBS click distribution.}
+\label{fig:worst}
+\end{figure}
+
+\paragraph{Local (per-bin) mixture: no robust gain.} We also tested a
+location-dependent mixture $q(x)=w(x)q_{\mathrm{thr}}(x)+(1-w(x))q_{\mathrm{PNR}}(x)$
+with $w(x)$ gated by the local peakiness of the empirical target
+(\texttt{combine\_local}). It matches the global mixture but does not reliably
+beat it, and occasionally does slightly worse through mild overfitting of the
+two-parameter gate (Table~\ref{tab:local}). The per-bin \emph{convex-hull
+bound} (the best any mixture of the two fixed curves could reach, computed with
+the true target) shows real headroom exists --- but a simple peakiness gate
+does not realise it, and richer per-bin fitting would overfit the samples. The
+global convex mixture therefore remains the robust recommendation; closing the
+gap to the hull bound is left for future work (Sec.~\ref{sec:outlook}).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+Target ($m{=}6$) & Threshold & PNR & Global mix & Local mix & Hull bound\\
+\midrule
+Cauchy           & 0.030 & 0.593 & 0.030 & 0.030 & 0.018\\
+Multimodal       & 0.051 & 0.117 & 0.050 & 0.048 & 0.021\\
+Asym.\ bimodal   & 0.050 & 0.106 & 0.036 & 0.038 & 0.015\\
+Sharp+broad      & 0.092 & 0.983 & 0.082 & 0.075 & 0.024\\
+\bottomrule
+\end{tabular}
+\caption{Global vs local mixture and the per-bin convex-hull bound. The local
+mixture tracks the global one; the gap to the hull bound is headroom no simple
+local gate captures.}
+\label{tab:local}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{local_vs_global_cauchy.png}
+\caption{Cauchy ($m=6$): global and local mixtures nearly coincide, both well
+above the per-bin convex-hull bound (dotted).}
+\label{fig:local}
+\end{figure}
+
 \section{Conclusions and outlook}
+\label{sec:outlook}
 The GBS distribution-learning pipeline has several orthogonal bottlenecks, each
 individually addressable: the initial construction (parity / per-pair /
 variance), the encoding (Gray + probability matching), the optimiser (analytic
@@ -519,12 +624,23 @@ mixture never loses and wins by $2$--$3\times$ on targets with both broad and
 sharp structure (Sec.~\ref{sec:combine}); the mixture is physically realizable
 as a per-shot choice of detector.
 
-Two structural limits remain and are now well characterised: the multimodal
-valley is an expressivity floor of a single Gaussian state (neither objective
-reweighting nor encoding removes it), and single detectors are concentration-
-limited. The natural next step is added expressivity --- displacement (already
-prototyped) or a small mixture of GBS states --- evaluated under the honest,
-sample-only protocol and the analytic KL used here.
+A scaling study over nine targets and $m\in\{4,5,6\}$ (Sec.~\ref{sec:scaling})
+shows the pipeline is broadly robust: eight of nine targets --- including
+strongly skewed and heavy-tailed ones --- reach $\mathrm{KL}\lesssim0.08$ at
+every mode count.
+
+Three structural limits remain and are now well characterised. (i) The
+multimodal valley is an expressivity floor: a single Gaussian state cannot carve
+a deep inter-mode gap. (ii) Its mirror image is a \emph{concentration ceiling}:
+a very narrow target (the worst case, $\mathrm{KL}\approx0.2$--$0.3$) cannot be
+matched because the model's most-probable pattern cannot carry enough mass;
+this eases with more modes. (iii) A per-bin readout mixture has theoretical
+headroom (the convex-hull bound) that a simple local gate does not realise, and
+richer per-bin fitting overfits. The natural next steps are added expressivity
+--- displacement (already prototyped) or a small mixture of GBS states, which
+directly attacks both the valley floor and the concentration ceiling --- and a
+better-regularised local combiner to close the gap to the hull bound, all
+evaluated under the honest, sample-only protocol and the analytic KL used here.
 
 \begin{thebibliography}{9}
 \bibitem{banchi2020}

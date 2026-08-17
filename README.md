@@ -30,7 +30,9 @@ optimization/                       WAW training variants
   train_threshold_nmean.py            central-spike suppression via n_mean
   select_nmean.py                     pick n_mean by minimum empirical KL
 ensemble/
-  combine_threshold_pnr.py            empirical-best mixture of the two readouts
+  combine_threshold_pnr.py            empirical-best global mixture of the two readouts
+  combine_local.py                    location-dependent (per-bin) mixture
+run_scaling_study.py                  targets x m in {4,5,6} sweep + worst-case figures
 displacement/                       breaking photon-number parity
   train_displaced_gbs.py              full 2m displacement vector
   train_waw_then_displace.py          scalable scalar displacement
@@ -89,9 +91,16 @@ python run_experiments.py nmean --target cauchy --modes 6
 
 # threshold + PNR convex mixture (beats both on mixed-structure targets)
 python run_experiments.py combine --target cauchy --modes 6
+
+# global vs local (per-bin) mixture, with the convex-hull bound
+python run_experiments.py local --target cauchy --modes 6
+
+# full scaling study across 9 targets x m in {4,5,6}; writes report figures
+python run_scaling_study.py
 ```
 
-Targets: `normal`, `mmodal`, `lognorm`, `expo`, `cauchy`, `bimodal_asym`.
+Targets: `normal`, `mmodal`, `lognorm`, `expo`, `cauchy`, `bimodal_asym`,
+`skewed`, `narrow`, `heavy_tail`, `sharp_plus_broad`.
 
 ## Typical usage in code
 
@@ -123,7 +132,9 @@ print(kl_before, "->", kl_after)
 | Choose the mean photon number | `optimization/select_nmean.py` |
 | Break photon-number parity | `displacement/*.py` |
 | Photon-counting detectors | `readout/pnr_readout.py` |
-| Combine threshold + PNR | `ensemble/combine_threshold_pnr.py` |
+| Combine threshold + PNR (global) | `ensemble/combine_threshold_pnr.py` |
+| Combine threshold + PNR (per-bin) | `ensemble/combine_local.py` |
+| Scaling study / worst cases | `run_scaling_study.py` |
 
 ## Summary of findings
 
@@ -142,5 +153,14 @@ print(kl_before, "->", kl_after)
 - **Threshold + PNR mixture**: the empirical-best convex mixture never loses and
   beats both single readouts by 2–3× on targets with both broad and sharp
   structure (e.g. Cauchy, asymmetric bimodal).
+- **Scaling (m=4,5,6, 9 targets)**: the pipeline is robust — 8/9 targets reach
+  KL ≲ 0.08, including strongly skewed and heavy-tailed ones.
+- **Worst case**: very *narrow* (concentrated) targets (KL ≈ 0.2–0.3) — a
+  *concentration ceiling*: the model's most-probable pattern cannot carry enough
+  mass. Eases with more modes. This mirrors the multimodal *valley* floor.
+- **Local (per-bin) mixture**: no robust gain over the global mixture; the
+  convex-hull bound shows headroom exists but a simple peakiness gate does not
+  realise it (and richer per-bin fitting overfits). Global mixture is the
+  robust choice.
 - The residual error on multimodal targets is an expressivity floor of a single
   Gaussian state; displacement or a GBS mixture is the next step.

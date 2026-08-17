@@ -65,8 +65,37 @@ def bimodal_asym(x):
     return p / np.sum(p)
 
 
+# --- harder targets: very skewed / concentrated / heavy-tailed / mixed --------
+def skewed(x):
+    """Strongly right-skewed (gamma-like): sharp rise, long tail."""
+    p = (x ** 2) * np.exp(-2.2 * x)
+    return p / np.sum(p)
+
+
+def narrow(x):
+    """Very concentrated single peak at x=2 (std ~0.1)."""
+    p = np.exp(-((x - 2.0) ** 2) / 0.02)
+    return p / np.sum(p)
+
+
+def heavy_tail(x):
+    """Heavy (power-law) tail, sharp near the left edge."""
+    p = 1.0 / (0.3 + x) ** 2.5
+    return p / np.sum(p)
+
+
+def sharp_plus_broad(x):
+    """Mixed structure: a narrow spike (std ~0.1) plus a broad hump (std ~0.6).
+    Neither a pure-broad nor pure-sharp target -- a stress test for a
+    location-dependent (local) readout mixture."""
+    p = 0.5 * np.exp(-((x - 1.2) ** 2) / 0.02) + 0.5 * np.exp(-((x - 2.7) ** 2) / 0.8)
+    return p / np.sum(p)
+
+
 TARGETS = {"normal": normal, "mmodal": mmodal, "lognorm": lognorm,
-           "expo": expo, "cauchy": cauchy, "bimodal_asym": bimodal_asym}
+           "expo": expo, "cauchy": cauchy, "bimodal_asym": bimodal_asym,
+           "skewed": skewed, "narrow": narrow, "heavy_tail": heavy_tail,
+           "sharp_plus_broad": sharp_plus_broad}
 
 
 # ============================================================================

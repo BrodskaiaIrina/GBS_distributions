@@ -142,6 +142,27 @@ def combine(target="cauchy", modes=6, num_samples=6000):
     print(f"  mixture (w*={w:.2f}) : {_safe_kl(pt, q_mix):.4f}")
 
 
+def local(target="cauchy", modes=6, num_samples=6000):
+    """Global vs local (per-bin) threshold+PNR mixture, with the convex-hull bound."""
+    from ensemble.combine_threshold_pnr import combine_threshold_pnr
+    from ensemble.combine_local import combine_local
+    from gbs_core import _safe_kl
+    dist = TARGETS[target]
+    xs = np.linspace(X0, X1, 2 ** modes - 2)
+    pt = dist(xs); pt = pt / pt.sum()
+    data = bin_samples_from_dist(dist, X0, X1, num_samples, modes)
+    q_g, w_g, q_thr, q_pnr = combine_threshold_pnr(data, modes)
+    q_l, (a, b), w, _, _ = combine_local(data, modes)
+    lo, hi = np.minimum(q_thr, q_pnr), np.maximum(q_thr, q_pnr)
+    q_hull = np.clip(pt, lo, hi); q_hull = q_hull / q_hull.sum()
+    print(f"\n{target} m={modes} — global vs local mixture (KL vs true)")
+    print(f"  threshold        : {_safe_kl(pt, q_thr):.4f}")
+    print(f"  PNR              : {_safe_kl(pt, q_pnr):.4f}")
+    print(f"  global mixture   : {_safe_kl(pt, q_g):.4f}  (w={w_g:.2f})")
+    print(f"  local mixture    : {_safe_kl(pt, q_l):.4f}  (a={a:.2f}, b={b:.2f})")
+    print(f"  convex-hull bound: {_safe_kl(pt, q_hull):.4f}  (best any per-bin mix)")
+
+
 def spike(target="normal", modes=6, num_samples=6000):
     """Show the central spike suppressed by lowering n_mean."""
     dist = TARGETS[target]
@@ -162,7 +183,7 @@ def spike(target="normal", modes=6, num_samples=6000):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("experiment", choices=["constructions", "pnr", "spike", "nmean", "combine"])
+    ap.add_argument("experiment", choices=["constructions", "pnr", "spike", "nmean", "combine", "local"])
     ap.add_argument("--target", default="normal", choices=list(TARGETS))
     ap.add_argument("--modes", type=int, default=5)
     ap.add_argument("--encoding", default="binary", choices=["binary", "gray"])
@@ -178,3 +199,5 @@ if __name__ == "__main__":
         nmean(a.target, a.modes, a.num_samples)
     elif a.experiment == "combine":
         combine(a.target, a.modes, a.num_samples)
+    elif a.experiment == "local":
+        local(a.target, a.modes, a.num_samples)
