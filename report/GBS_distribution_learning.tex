@@ -605,6 +605,141 @@ above the per-bin convex-hull bound (dotted).}
 \label{fig:local}
 \end{figure}
 
+\section{Full-matrix MLE, the hafnian, and scaling limits}
+\label{sec:mle}
+
+\subsection{Accounting for the hafnian: full-matrix MLE}
+The construction corrections (parity, per-pair) only repair the $1/\prod_i n_i!$
+factorial; the probability also depends on the matrix through
+$|\mathrm{Haf}(A[\mathbf n])|^2$. WAW cannot address this: it trains only the $m$
+diagonal weights (per-mode marginals), so every off-diagonal correlation --- what
+the hafnian actually depends on --- stays frozen at the construction. The clean
+way to account for the hafnian is to fit the matrix that enters it, by maximum
+likelihood. MLE maximises $\sum_t\log P_A(\mathbf s^{(t)})$, which equals
+$-N[\KL(p_{\mathrm{emp}}\|P_A)+H(p_{\mathrm{emp}})]$: maximising likelihood is
+exactly minimising $\KL(p_{\mathrm{emp}}\|P_A)$, so our KL training already
+\emph{is} MLE --- but restricted to the diagonal. Lifting that restriction and
+optimising all $\binom{m+1}{2}$ entries of $A$ (\texttt{train\_fullA}) roughly
+\textbf{halves} the KL (Table~\ref{tab:fullA}, Fig.~\ref{fig:fullA}): it shapes
+the correlations the hafnian depends on.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Target ($m{=}5$, binary) & base (parity) & diagonal WAW (5 par) & full-matrix MLE (15 par)\\
+\midrule
+Normal         & 0.375 & 0.201 & \textbf{0.115}\\
+Multimodal     & 0.811 & 0.592 & \textbf{0.389}\\
+Cauchy         & 0.568 & 0.361 & \textbf{0.217}\\
+Asym.\ bimodal & 0.716 & 0.556 & \textbf{0.357}\\
+Log-normal     & 0.445 & 0.341 & \textbf{0.069}\\
+\bottomrule
+\end{tabular}
+\caption{Diagonal WAW matches marginals only; full-matrix MLE fits the
+correlations inside the hafnian and roughly halves the KL on every target.}
+\label{tab:fullA}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.78\textwidth]{fullA_vs_waw.png}
+\caption{Full-matrix MLE versus diagonal WAW (analytic KL, $m=5$). Fitting all
+entries of $A$ --- i.e.\ doing MLE over the matrix the hafnian depends on, not
+just the per-mode weights --- consistently beats WAW.}
+\label{fig:fullA}
+\end{figure}
+
+Caveats: more parameters ($\binom{m+1}{2}$ vs $m$), and one loses WAW's elegant
+closed-form $O(m)$ gradient (we use finite differences; the general gradient of
+Banchi \textit{et al.}\ Sec.~IV.A applies). Physically it trains the
+interferometer and squeezing jointly rather than per-mode weights only. It is
+still a classical optimisation at small $m$ and composes with Gray encoding for
+further gains. This also settles the ``try MLE'' suggestion: MLE and our KL
+training are the same objective; the useful extension is MLE over the \emph{full}
+matrix, which clearly outperforms the diagonal restriction.
+
+\subsection{Combining full-matrix MLE with Gray encoding}
+\label{sec:fullAgray}
+Full-matrix MLE (model capacity) and Gray coding (encoding) are orthogonal, and
+combining them is our strongest pipeline. Table~\ref{tab:fullAgray} /
+Fig.~\ref{fig:fullAgray} ($m=5$): on top of the previous best (WAW+Gray),
+full-matrix MLE roughly \textbf{halves the KL again} on the symmetric/multimodal
+targets, and the two levers compound (e.g.\ multimodal $0.24\to0.14$, normal
+$0.135\to0.068$, cauchy $0.14\to0.066$).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Target ($m{=}5$) & WAW+Gray & full-A, binary & full-A, Gray & best\\
+\midrule
+Normal           & 0.135 & 0.115 & \textbf{0.068} & 0.068\\
+Log-normal       & 0.220 & \textbf{0.069} & 0.115 & 0.069\\
+Cauchy           & 0.140 & 0.217 & \textbf{0.066} & 0.066\\
+Multimodal       & 0.239 & 0.389 & \textbf{0.138} & 0.138\\
+Asym.\ bimodal   & 0.191 & 0.357 & \textbf{0.099} & 0.099\\
+Sharp+broad      & 0.415 & \textbf{0.238} & 0.306 & 0.238\\
+\bottomrule
+\end{tabular}
+\caption{Full-matrix MLE $\times$ encoding. Gray helps full-A on the
+symmetric/multimodal targets; binary is better for the skewed (log-normal) and
+mixed (sharp+broad) ones --- so the encoding, like $n_{\mathrm{mean}}$, should be
+\emph{selected} per target. Best column = full-A with the better encoding.}
+\label{tab:fullAgray}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fullA_gray.png}
+\caption{Full-matrix MLE combined with Gray encoding ($m=5$). full-A+Gray
+(green) is best on 4/6 targets; the WAW warm-start (blue) is identical to the
+cold start (full-A reaches the same optimum, so warm-starting adds nothing).}
+\label{fig:fullAgray}
+\end{figure}
+
+Three takeaways. (i) Gray still helps once the model is full-rank --- the
+encoding reduces the representation burden regardless of capacity --- but not
+universally: strongly skewed/mixed targets prefer binary, so \emph{select the
+encoding} (two cheap choices, by empirical KL). (ii) Warm-starting full-A from
+the WAW solution gives \emph{no} additional gain: cold full-A reaches the same
+optimum, so the landscape is benign here. (iii) Cumulatively, full-A + best
+encoding is $\sim\!4$--$8\times$ below the original \texttt{A\_from\_samples}+WAW
+baseline (e.g.\ normal $0.56\to0.068$, multimodal $0.61\to0.138$).
+
+\subsection{Scaling limits: large $m$, few samples, random targets}
+\label{sec:scalinglimit}
+The probability-matched (``pretraining'') encoding needs an estimate of the
+target over all $K=2^m-2$ bins --- it ranks bins by empirical mass. With a fixed
+sample budget this breaks as $m$ grows: the samples-per-bin $N/K$ falls
+exponentially, and even the best possible estimate, the raw histogram, degrades
+with it. Figure~\ref{fig:q3} shows, at $N=2000$: the histogram KL rises from
+$0.01$ at $m=5$ (67 samples/bin) to $1.4$ at $m=10$ (2 samples/bin), and the GBS
+model tracks it --- it cannot beat the data, and the expressivity floor often
+puts it slightly \emph{above} the histogram. A completely random (Dirichlet)
+target behaves the same way: the limit here is sampling, not smoothness.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.82\textwidth]{q3_random_scaling.png}
+\caption{Scaling of the bin-encoding pipeline at fixed $N=2000$ samples. As $m$
+grows, samples-per-bin (grey, log scale) collapses and the KL --- histogram and
+GBS alike --- explodes. Smooth and random targets degrade together.}
+\label{fig:q3}
+\end{figure}
+
+For $m=100$ with a few thousand samples, $K=2^{100}$ and the samples-per-bin is
+$\sim10^{-27}$: every observed pattern is seen at most once, there is nothing to
+rank, and the encoding cannot even start. The bin-encoding approach is inherently
+limited to $m\lesssim10$--$12$ for thousands of samples (rule of thumb
+$N\gtrsim10\cdot2^m$). What \emph{does} scale is the training itself: WAW's
+gradient needs only the $m$ per-mode marginals $\langle n_k\rangle$, estimable
+from $\sim\!10^3$ samples at any $m$. So the optimiser scales; the
+1-D-density-into-bins \emph{encoding} does not. At large $m$ one must abandon that
+encoding and use GBS on natively high-dimensional, structured targets (graphs),
+where the distribution lives on a structured space rather than $2^m$ bins of a
+scalar.
+
 \section{Conclusions and outlook}
 \label{sec:outlook}
 The GBS distribution-learning pipeline has several orthogonal bottlenecks, each
@@ -636,11 +771,16 @@ a very narrow target (the worst case, $\mathrm{KL}\approx0.2$--$0.3$) cannot be
 matched because the model's most-probable pattern cannot carry enough mass;
 this eases with more modes. (iii) A per-bin readout mixture has theoretical
 headroom (the convex-hull bound) that a simple local gate does not realise, and
-richer per-bin fitting overfits. The natural next steps are added expressivity
---- displacement (already prototyped) or a small mixture of GBS states, which
-directly attacks both the valley floor and the concentration ceiling --- and a
-better-regularised local combiner to close the gap to the hull bound, all
+richer per-bin fitting overfits. The clearest expressivity lever we have
+demonstrated is \textbf{full-matrix MLE} (Sec.~\ref{sec:mle}): fitting the whole
+matrix the hafnian depends on, rather than the $m$ diagonal WAW weights, roughly
+halves the KL across targets. The natural next steps combine it with added
+physics --- displacement (already prototyped) or a small mixture of GBS states,
+which attack both the valley floor and the concentration ceiling --- all
 evaluated under the honest, sample-only protocol and the analytic KL used here.
+Finally, the bin-encoding itself does not scale past $m\!\approx\!12$ at
+realistic sample sizes (Sec.~\ref{sec:scalinglimit}); genuinely large-$m$ work
+should move to GBS-native, structured targets.
 
 \begin{thebibliography}{9}
 \bibitem{banchi2020}

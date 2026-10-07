@@ -163,6 +163,25 @@ def local(target="cauchy", modes=6, num_samples=6000):
     print(f"  convex-hull bound: {_safe_kl(pt, q_hull):.4f}  (best any per-bin mix)")
 
 
+def mle(target="normal", modes=5, encoding="binary", num_samples=3000):
+    """Full-matrix MLE vs diagonal WAW (both minimise the analytic KL = MLE),
+    under the chosen encoding. full-A + Gray is usually the strongest pipeline."""
+    from constructions.A_from_samples_parity import A_from_samples_parity
+    from optimization.train_fullA import train_fullA
+    dist = TARGETS[target]
+    sampler = bin_samples_from_dist_gray if encoding == "gray" else bin_samples_from_dist
+    pt = analytic_target(dist, X0, X1, modes, encoding=encoding)
+    data = sampler(dist, X0, X1, num_samples, modes)
+    A0 = A_from_samples_parity(data)
+    _, kl_base = analytic_eval(A0, modes, pt)
+    _, kl_waw, _ = train_WAW_analytic(A0, pt, modes, max_iter=120)
+    _, kl_full = train_fullA(A0, pt, modes, steps=120)
+    print(f"\n{target} m={modes} [{encoding}] — analytic KL (= MLE objective)")
+    print(f"  base (parity)            : {kl_base:.4f}")
+    print(f"  diagonal WAW ({modes} par)      : {kl_waw:.4f}")
+    print(f"  full-matrix MLE ({modes*(modes+1)//2} par) : {kl_full:.4f}")
+
+
 def spike(target="normal", modes=6, num_samples=6000):
     """Show the central spike suppressed by lowering n_mean."""
     dist = TARGETS[target]
@@ -183,7 +202,7 @@ def spike(target="normal", modes=6, num_samples=6000):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("experiment", choices=["constructions", "pnr", "spike", "nmean", "combine", "local"])
+    ap.add_argument("experiment", choices=["constructions", "pnr", "spike", "nmean", "combine", "local", "mle"])
     ap.add_argument("--target", default="normal", choices=list(TARGETS))
     ap.add_argument("--modes", type=int, default=5)
     ap.add_argument("--encoding", default="binary", choices=["binary", "gray"])
@@ -201,3 +220,5 @@ if __name__ == "__main__":
         combine(a.target, a.modes, a.num_samples)
     elif a.experiment == "local":
         local(a.target, a.modes, a.num_samples)
+    elif a.experiment == "mle":
+        mle(a.target, a.modes, a.encoding, a.num_samples)

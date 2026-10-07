@@ -29,6 +29,7 @@ optimization/                       WAW training variants
   train_WAW_mixed.py                  reverse-KL outlier suppression
   train_threshold_nmean.py            central-spike suppression via n_mean
   select_nmean.py                     pick n_mean by minimum empirical KL
+  train_fullA.py                      full-matrix MLE (fits all entries of A)
 ensemble/
   combine_threshold_pnr.py            empirical-best global mixture of the two readouts
   combine_local.py                    location-dependent (per-bin) mixture
@@ -127,6 +128,7 @@ print(kl_before, "->", kl_after)
 | Match the photon-number variance | `constructions/A_from_samples_variance.py` |
 | Make a smooth target representable | `encoding/gray_encoding.py` |
 | Reliable, monotone optimisation | `optimization/train_WAW_analytic.py` |
+| Fit correlations / the hafnian (MLE) | `optimization/train_fullA.py` |
 | Remove valley outliers | `optimization/train_WAW_mixed.py` |
 | Remove the central peak spike | `optimization/train_threshold_nmean.py` |
 | Choose the mean photon number | `optimization/select_nmean.py` |
@@ -162,5 +164,19 @@ print(kl_before, "->", kl_after)
   convex-hull bound shows headroom exists but a simple peakiness gate does not
   realise it (and richer per-bin fitting overfits). Global mixture is the
   robust choice.
+- **Full-matrix MLE** (`train_fullA`): fitting all entries of A — the matrix the
+  hafnian depends on — instead of the m diagonal WAW weights roughly halves the
+  KL. MLE and our KL training are the same objective; the gain is lifting WAW's
+  diagonal restriction.
+- **full-A + Gray is the strongest pipeline** (`run_experiments.py mle --encoding gray`):
+  it halves the KL again vs WAW+Gray on symmetric/multimodal targets
+  (e.g. multimodal 0.24→0.14, normal 0.135→0.068), ~4–8× below the original
+  baseline. Encoding is target-dependent (Gray for symmetric/multimodal, binary
+  for skewed/mixed) — select it like n_mean. WAW warm-start adds nothing.
+- **Scaling limit**: the bin-encoding / pretraining trick needs ≳10 samples per
+  bin, so it is capped at m ≲ 12 for thousands of samples (K = 2^m bins). WAW's
+  gradient (m marginals) scales, but the 1-D-into-bins encoding does not — large
+  m needs GBS-native structured targets.
 - The residual error on multimodal targets is an expressivity floor of a single
-  Gaussian state; displacement or a GBS mixture is the next step.
+  Gaussian state; displacement, a GBS mixture, or full-matrix MLE are the next
+  steps.
